@@ -1,0 +1,81 @@
+# ============================================================
+# ESPHome package: ST7789P3 76×284 display
+# ============================================================
+# Drop this file in /config/esphome/ and include via:
+#
+#   packages:
+#     display: !include display_st7789p3_76x284.yaml
+#
+# Required substitutions in your main YAML:
+#   display_clk_pin:  GPIO pin for SPI clock
+#   display_mosi_pin: GPIO pin for SPI MOSI
+#   display_cs_pin:   GPIO pin for CS
+#   display_dc_pin:   GPIO pin for DC
+#   display_rst_pin:  GPIO pin for RST
+#   display_bl_pin:   GPIO pin for backlight (active LOW)
+#
+# Required fonts in /config/esphome/fonts/:
+#   materialdesignicons-webfont.ttf
+#   Roboto-Bold.ttf
+#   Roboto-Regular.ttf
+# ============================================================
+
+# ── SPI ──────────────────────────────────────────────────────
+spi:
+  clk_pin: ${display_clk_pin}
+  mosi_pin: ${display_mosi_pin}
+
+# ── Backlight (active LOW) ────────────────────────────────────
+output:
+  - platform: ledc
+    pin: ${display_bl_pin}
+    id: backlight_pwm
+    inverted: true            # This panel's backlight is active LOW
+
+light:
+  - platform: monochromatic
+    output: backlight_pwm
+    name: "Display Backlight"
+    id: display_backlight
+    restore_mode: ALWAYS_ON
+    default_transition_length: 500ms
+
+# ── Display ───────────────────────────────────────────────────
+display:
+  - platform: mipi_spi
+    id: main_display
+    model: CUSTOM
+    cs_pin: ${display_cs_pin}
+    dc_pin: ${display_dc_pin}
+    reset_pin: ${display_rst_pin}
+    dimensions:
+      width: 76               # Portrait width (short axis)
+      height: 284             # Portrait height (long axis)
+      offset_width: 82        # (240 - 76) / 2 — centres window in 240px CGRAM
+      offset_height: 0
+      pad_height: 18          # 320 - 284 - 18 = 18 invisible rows; prevents
+                              # VRAM garbage appearing on right edge after rotation
+    color_order: rgb
+    invert_colors: false
+    spi_mode: mode3           # Required — mode0 produces a white screen
+    data_rate: 10MHz
+    update_interval: never    # LVGL drives rendering
+
+    # Init sequence for ST7789P3
+    # Note: SLPOUT (0x11), INVON/INVOFF (0x21/0x20) and DISPON (0x29) are
+    # appended automatically by mipi_spi — do NOT add them here.
+    # COLMOD (0x3A) is also set automatically.
+    init_sequence:
+      - [0x36, 0x00]         # MADCTL: no hardware rotation, RGB order
+                              # LVGL handles rotation via rotation: 270°
+      - [0xB2, 0x0C, 0x0C, 0x00, 0x33, 0x33]  # PORCTRL
+      - [0xB7, 0x35]         # GCTRL
+      - [0xBB, 0x19]         # VCOMS
+      - [0xC0, 0x2C]         # LCMCTRL
+      - [0xC2, 0x01]         # VDVVRHEN
+      - [0xC3, 0x12]         # VRHS
+      - [0xC4, 0x20]         # VDVS
+      - [0xC6, 0x0F]         # FRCTRL2: 60 Hz frame rate
+      - [0xD0, 0xA4, 0xA1]   # PWCTRL1
+      - [0xE0, 0xD0, 0x04, 0x0D, 0x11, 0x13, 0x2B, 0x3F, 0x54, 0x4C, 0x18, 0x0D, 0x0B, 0x1F, 0x23]  # PVGAMCTRL
+      - [0xE1, 0xD0, 0x04, 0x0C, 0x11, 0x13, 0x2C, 0x3F, 0x44, 0x51, 0x2F, 0x1F, 0x1F, 0x20, 0x23]  # NVGAMCTRL
